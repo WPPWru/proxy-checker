@@ -1,0 +1,19 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Portbilet API",
+        "version": "0.2"
+    },
+    "paths": {
+        "/api/order/get": {
+            "get": {
+                "operationId": "5822f0a4184f1c3492d09cfe3ffb79b1",
+                "responses": {
+                    "200": {
+                        "description": "Display a listing of items."
+                    }
+                }
+            }
+        }
+    }
+}

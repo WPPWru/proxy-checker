@@ -1,0 +1,97 @@
+networks:
+    prxchk:
+volumes:
+    db:
+    redis:
+
+services:
+
+    adminer:
+        container_name: proxy-checker-adminer
+        image: adminer
+        restart: always
+        depends_on:
+            - db
+        ports:
+            - '${FORWARD_ADMINER_PORT:-8999}:8080'
+        networks:
+            - prxchk
+
+    redis:
+        container_name: proxy-checker-redis
+        image: redis:alpine
+        ports:
+            - '${FORWARD_REDIS_PORT:-6379}:6379'
+        volumes:
+            - redis:/data
+        networks:
+            - prxchk
+        healthcheck:
+            test:
+                - CMD
+                - redis-cli
+                - ping
+            retries: 3
+            timeout: 5s
+
+    nginx:
+        container_name: proxy-checker-nginx
+        image: nginx
+        volumes:
+            # NGINX must have access to laravel files
+            - '.:/var/www/html'
+            # NGINX conf
+            - './docker/nginx/fastcgi_params:/etc/nginx/fastcgi_params'
+            - './docker/nginx/default-dev.conf:/etc/nginx/conf.d/default.conf'
+        ports:
+            - '${APP_PORT:-80}:80'
+        networks:
+            - prxchk
+        depends_on:
+            - laravel
+
+    db:
+        container_name: proxy-checker-db
+        #image: mariadb:11.1.2
+        image: mysql:8.0.34
+        ports:
+            - '${FORWARD_DB_PORT:-3306}:3306'
+        environment:
+            MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ROOT_HOST: '%'
+            MYSQL_DATABASE: '${DB_DATABASE}'
+            MYSQL_USER: '${DB_USERNAME}'
+            MYSQL_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        volumes:
+            - 'db:/var/lib/mysql'
+        networks:
+            - prxchk
+        healthcheck:
+            test:
+                - CMD
+                - mysqladmin
+                - ping
+                - '-p${DB_PASSWORD}'
+            retries: 3
+            timeout: 5s
+
+    laravel:
+        container_name: proxy-checker-laravel
+        build: .
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
+        ports:
+            - '${VITE_PORT:-5173}:${VITE_PORT:-5173}'
+        environment:
+            # Xdebug, как настроить: https://habr.com/ru/articles/712670/
+            XDEBUG_MODE: '${XDEBUG_MODE:-off}'
+            XDEBUG_CONFIG: '${XDEBUG_CONFIG:-client_host=${XDEBUG_CLIENT_HOST:-host.docker.internal} client_port=${XDEBUG_CLIENT_PORT:-9001} log=${XDEBUG_LOG:-/var/log/xdebug.log} idekey=${XDEBUG_IDEKEY:-PHPSTORM}}'
+            #IGNITION_LOCAL_SITES_PATH: '${PWD}'
+        volumes:
+            - '.:/var/www/html'
+        networks:
+            - prxchk
+        depends_on:
+            - db
+            - redis
